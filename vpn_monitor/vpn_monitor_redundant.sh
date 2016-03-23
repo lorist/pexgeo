@@ -2,7 +2,7 @@
 # This script will monitor another VPN instance and take over its routes
 # if communication with the other instance fails
 #yum -y install aws-cli
-
+service ipsec stop
 # VPN instance variables
 # Other instance's IP to ping and route to grab if other node goes down
 VPN_ID=<enter_main_vpn_instance_id>
@@ -15,7 +15,7 @@ My_RT_ID=<usually_the_same_as_VPN_RT_ID>
 PUBLIC_IP=<enter_your _elastic_ip>
 
 # Specify the EC2 region that this will be running in (e.g. https://ec2.us-east-1.amazonaws.com)
-EC2_URL=https://ec2.eu-central-1.amazonaws.com
+EC2_URL=<eg: https://ec2.eu-central-1.amazonaws.com>
 EC2_REGION=`echo $EC2_URL | sed "s/https:\/\/ec2\.//g" | sed "s/\.amazonaws\.com//g"`
 
 # Health Check variables
@@ -64,7 +64,7 @@ while [ . ]; do
     # Set HEALTHY variables to unhealthy (0)
     ROUTE_HEALTHY=0
     VPN_HEALTHY=0
-    STOPPING_VPN=1
+    STOPPING_VPN=0
     while [ "$VPN_HEALTHY" == "0" ]; do
       # VPN instance is unhealthy, loop while we try to fix it
       if [ "$ROUTE_HEALTHY" == "0" ]; then
@@ -77,8 +77,7 @@ while [ . ]; do
       /opt/aws/bin/ec2-associate-address --region $EC2_REGION $PUBLIC_IP -i $Instance_ID
       echo `date` "-- Starting IPSEC"
       service ipsec start
-
-	    ROUTE_HEALTHY=1
+	ROUTE_HEALTHY=1
       fi
       # Check VPN state to see if we should stop it or start it again
       # The line below works with EC2 API tools version 1.6.12.2 2013-10-15. If you are using a different version and your script is stuck at VPN_STATE, please modify the script to "print $5;" instead of "print $4;".
@@ -91,15 +90,15 @@ while [ . ]; do
       if [ "$VPN_STATE" == "stopped" ]; then
     	echo `date` "-- Other VPN instance stopped, starting it back up"
         /opt/aws/bin/ec2-start-instances $VPN_ID -U $EC2_URL
-	      VPN_HEALTHY=1
+	VPN_HEALTHY=1
         sleep $Wait_for_Instance_Start
       else
-	    # if [ "$STOPPING_VPN" == "0" ]; then
-    	#   echo `date` "-- Other VPN instance $VPN_STATE, attempting to stop for reboot"
-	    #   /opt/aws/bin/ec2-stop-instances $VPN_ID -U $EC2_URL
-	    #   STOPPING_VPN=1
-	    # fi
-     #    sleep $Wait_for_Instance_Stop
+  if [ "$STOPPING_VPN" == "0" ]; then
+	      echo `date` "-- Other VPN instance $VPN_STATE, attempting to stop for reboot"
+    /opt/aws/bin/ec2-stop-instances $VPN_ID -U $EC2_URL
+    STOPPING_VPN=1
+  fi
+        sleep $Wait_for_Instance_Stop
       fi
     done
   else
