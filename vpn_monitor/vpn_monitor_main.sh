@@ -5,16 +5,16 @@
 
 # VPN instance variables
 # Other instance's IP to ping and route to grab if other node goes down
-VPN_ID=<enter_backup_vpn_instance_id>
-VPN_RT_ID=<enter_your_route_table_id>
+VPN_ID=<remote vpn instance id>
+VPN_RT_ID=<your route table>
 
 # My route to grab when I come back up
-My_RT_ID=<usually_same_as_VPN_RT_ID>
+My_RT_ID=<your route table (can be different from VPN_RT_ID)>
 # Public IP
-PUBLIC_IP=<enter_your_elastic_ip>
+PUBLIC_IP=<your elastic ip>
 
 # Specify the EC2 region that this will be running in (e.g. https://ec2.us-east-1.amazonaws.com)
-EC2_URL=<enter_region_url>
+EC2_URL=<eg: https://ec2.eu-central-1.amazonaws.com>
 EC2_REGION=`echo $EC2_URL | sed "s/https:\/\/ec2\.//g" | sed "s/\.amazonaws\.com//g"`
 
 # Health Check variables
@@ -81,16 +81,14 @@ while [ . ]; do
     while [ "$VPN_HEALTHY" == "0" ]; do
       # VPN instance is unhealthy, loop while we try to fix it
       if [ "$ROUTE_HEALTHY" == "0" ]; then
-    	echo `date` "-- Other VPN heartbeat failed, taking over $VPN_RT_ID default route"
-    	/opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.31.0.0/16 -i $Instance_ID -U $EC2_URL
-      /opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.32.0.0/16 -i $Instance_ID -U $EC2_URL
-      /opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.33.0.0/16 -i $Instance_ID -U $EC2_URL
-      /opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.34.0.0/16 -i $Instance_ID -U $EC2_URL
-
-      echo `date` "-- Adding Public IP $PUBLIC_IP instance to this instance"
-      /opt/aws/bin/ec2-associate-address --region $EC2_REGION $PUBLIC_IP -i $Instance_ID
-
-	    ROUTE_HEALTHY=1
+    	  echo `date` "-- Other VPN heartbeat failed, taking over $VPN_RT_ID default route"
+    	  /opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.31.0.0/16 -i $Instance_ID -U $EC2_URL
+        /opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.32.0.0/16 -i $Instance_ID -U $EC2_URL
+        /opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.33.0.0/16 -i $Instance_ID -U $EC2_URL
+        /opt/aws/bin/ec2-replace-route $My_RT_ID -r 172.34.0.0/16 -i $Instance_ID -U $EC2_URL
+        echo `date` "-- Adding Public IP $PUBLIC_IP instance to this instance"
+        /opt/aws/bin/ec2-associate-address --region $EC2_REGION $PUBLIC_IP -i $Instance_ID
+	ROUTE_HEALTHY=1
       fi
       # Check VPN state to see if we should stop it or start it again
       # The line below works with EC2 API tools version 1.6.12.2 2013-10-15. If you are using a different version and your script is stuck at VPN_STATE, please modify the script to "print $5;" instead of "print $4;".
@@ -103,11 +101,11 @@ while [ . ]; do
       if [ "$VPN_STATE" == "stopped" ]; then
     	echo `date` "-- Other VPN instance stopped, starting it back up"
         /opt/aws/bin/ec2-start-instances $VPN_ID -U $EC2_URL
-	      VPN_HEALTHY=1
+	VPN_HEALTHY=1
         sleep $Wait_for_Instance_Start
       else
 	if [ "$STOPPING_VPN" == "0" ]; then
-    	  echo `date` "-- Other VPN instance $VPN_STATE, attempting to stop for reboot"
+    echo `date` "-- Other VPN instance $VPN_STATE, attempting to stop for reboot"
 	  /opt/aws/bin/ec2-stop-instances $VPN_ID -U $EC2_URL
 	  STOPPING_VPN=1
 	fi
