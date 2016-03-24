@@ -25,7 +25,7 @@ json_response = { "status": "default",
             "result": {},
             }
 
-app = Flask(__name__)
+appication = Flask(__name__)
 
 def setup_logging(loglevel):
     logformat = "%(asctime)s: %(message)s"
@@ -44,7 +44,7 @@ def parse_arguments():
     return parser.parse_args()
 
 def download_fresh_db():
-    app.logger.info("downloading fresh database from: {}".format(DB_FILE_URL))
+    application.logger.info("downloading fresh database from: {}".format(DB_FILE_URL))
     req = requests.get(DB_FILE_URL, stream=True)
     gzip_file_location = "{}.gz".format(DB_FILE_LOCATION)
 
@@ -54,7 +54,7 @@ def download_fresh_db():
                 f.write(chunk)
                 f.flush()
 
-    app.logger.info("decompressing database file...")
+    application.logger.info("decompressing database file...")
     with open(DB_FILE_LOCATION, 'wb') as f:
         with gzip.open(gzip_file_location, 'rb') as g:
             f.write(g.read())
@@ -62,20 +62,20 @@ def download_fresh_db():
 def get_db_reader():
     reader = getattr(g, '_db_reader', None)
     if reader is None:
-        app.logger.info("opening connection to database")
+        application.logger.info("opening connection to database")
         reader = geoip2.database.Reader(DB_FILE_LOCATION)
     return reader
 
 """ Application """
-@app.route('/policy/v1/participant/location')
+@application.route('/policy/v1/participant/location')
 def send_location_policy():
     ip = request.args.get('remote_address', '')
-    app.logger.warning("Unable find ip address: {}".format(ip))
+    application.logger.warning("Unable find ip address: {}".format(ip))
     if ip:
         location_response = json_response
         geoip_reader = get_db_reader()
         result = geoip_reader.country(ip)
-        app.logger.warning("Result: {}".format(result))
+        application.logger.warning("Result: {}".format(result))
         try:
             continent_code = geoip_reader.country(ip).continent.code
             print("User connected from : "+continent_list[continent_code])
@@ -115,4 +115,4 @@ if __name__ == '__main__':
         download_fresh_db()
 
     if not args.download:
-        app.run(debug=args.debug)
+        application.run(debug=args.debug)
