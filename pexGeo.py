@@ -20,8 +20,6 @@ continent_list = {
   "OC": "Oceania",
   "SA": "South America"
 }
-
-
 """ Default JSON response template """
 json_response = { "status": "default",
             "result": {},
@@ -68,34 +66,9 @@ def get_db_reader():
         reader = geoip2.database.Reader(DB_FILE_LOCATION)
     return reader
 
-@app.route('/geoip/')
-@app.route('/geoip/<ip_address>')
-def geoip(ip_address=None):
-    ip = ip_address if ip_address else request.remote_addr
-    try:
-        app.logger.info("looking up IP address: {}".format(ip))
-        geoip_reader = get_db_reader()
-        result = geoip_reader.country(ip)
-        response = {}
-        for key, value in JSON_MAPPING.items():
-            try:
-                response[key] = reduce(getattr, value.split('.'), result)
-            except AttributeError:
-                response[key] = ''
-        response['ip'] = ip
-        response['metro_code'] = METRO_CODE
-        response['code'] = CODE
-        app.logger.info("returning response: \n{}".format(json.dumps(response,indent=2)))
-        return jsonify(**response)
-    except geoip2.errors.AddressNotFoundError as e:
-        app.logger.warning("Unable find ip address: {}".format(e))
-        return jsonify({'error': {'message': e.message}})
-
-        
 """ Application """
 @app.route('/policy/v1/participant/location')
 def send_location_policy():
-    # params = request.query.decode()
     ip = request.args.get('remote_address', '')
     app.logger.warning("Unable find ip address: {}".format(ip))
     if ip:
