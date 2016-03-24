@@ -136,9 +136,9 @@ sudo start policy
 Tail /var/log/syslog to see the logs
 
 Test in a browser:
-
+```
 http://ec2-<your elastic IP>.ap-southeast-2.compute.amazonaws.com:8081/policy/v1/participant/location?remote_address=8.8.8.8
-
+```
 result:
 ```
 {
