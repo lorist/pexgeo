@@ -1,4 +1,4 @@
-from policy import application
+from policy import app
 import logging
 import logging.handlers
 import socket
@@ -12,13 +12,13 @@ class ContextFilter(logging.Filter):
     return True
 
 f = ContextFilter()
-application.logger.addFilter(f)
+app.logger.addFilter(f)
 handler = logging.handlers.SysLogHandler('/dev/log')
 formatter = logging.Formatter('%(asctime)s %(hostname)s POLICY SERVER:: %(message)s', datefmt='%b %d %H:%M:%S')
 handler.setFormatter(formatter)
 handler.setLevel(logging.INFO)
 f = ContextFilter()
-application.logger.addHandler(handler)
+app.logger.addHandler(handler)
 
 if __name__ == "__main__":
-    application.run()
+    app.run()
