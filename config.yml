@@ -1,6 +1,0 @@
-# Policy Server Config file
-server:
-    bind_address: 0.0.0.0
-    bind_port: 5000
-maxmind:
-    location: ./GeoLite2-Country.mmdb
