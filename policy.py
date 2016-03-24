@@ -70,15 +70,14 @@ def get_db_reader():
 @application.route('/policy/v1/participant/location')
 def send_location_policy():
     ip = request.args.get('remote_address', '')
-    application.logger.warning("Unable find ip address: {}".format(ip))
+    application.logger.info("Call from remote address: {}".format(ip))
     if ip:
         location_response = json_response
         geoip_reader = get_db_reader()
         result = geoip_reader.country(ip)
-        application.logger.warning("Result: {}".format(result))
+        application.logger.info("Call from: {}".format(result))
         try:
             continent_code = geoip_reader.country(ip).continent.code
-            print("User connected from : "+continent_list[continent_code])
             if continent_code == "EU":
                 location_response["status"] = "success"
                 location_response["result"]["location"] = "AWS-Ireland"
@@ -101,8 +100,7 @@ def send_location_policy():
             print("Dialer IP was not found")
             location_response["status"] = "not found"
         location_response["credit"] = "AWS regional Policy"
-        # response.content_type = "application/json"
-        # return json_dumps(location_response)
+        application.logger.info("Nominating {} location".format(location_response))
         return jsonify(**location_response)
     else:
         return """KO"""
