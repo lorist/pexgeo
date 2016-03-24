@@ -1,22 +1,15 @@
-
-import yaml
-
-from json import dumps as json_dumps
-
-from bottle import Bottle, run, request, response
-from geoip2 import database as geoip_db
+import argparse
+from functools import reduce
+import gzip
+import json
+import requests
+import logging
+from flask import Flask, g, jsonify, request
+import geoip2.database
 from geoip2 import errors as geoip_error
-#
 
-def load_config_file():
-    _config_file = open("config.yml", "r").read()
-    _config = yaml.load(_config_file)
-    return _config
-
-app = Bottle()
-
-""" Config value """
-config = load_config_file()
+DB_FILE_LOCATION = 'data/GeoLite2-Country.mmdb'
+DB_FILE_URL = 'http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.mmdb.gz'
 
 continent_list = {
   "AF": "Africa",
@@ -28,24 +21,90 @@ continent_list = {
   "SA": "South America"
 }
 
-try:
-    geoip_reader = geoip_db.Reader(config["maxmind"]["location"])
-except geoip_error.GeoIP2Error:
-    print("Error : Connection to GeoIP database fail")
 
 """ Default JSON response template """
 json_response = { "status": "default",
             "result": {},
             }
 
+app = Flask(__name__)
+
+def setup_logging(loglevel):
+    logformat = "%(asctime)s: %(message)s"
+    if loglevel:
+        logging.basicConfig(level=logging.DEBUG,format=logformat)
+    else:
+        logging.basicConfig(level=logging.INFO,format=logformat)
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Start a the flask server of the geoip project.')
+    parser.add_argument('-d','--debug', action='store_true', help='Enable debugging')
+    parser.add_argument('-f','--fresh', action='store_true', help='Download a fresh copy of the database')
+    parser.add_argument('-o','--download', action='store_true', help='Only download the database - don\'t start the app')
+    parser.add_argument("-v", "--verbose", action='store_true', help="increase output verbosity")
+
+    return parser.parse_args()
+
+def download_fresh_db():
+    app.logger.info("downloading fresh database from: {}".format(DB_FILE_URL))
+    req = requests.get(DB_FILE_URL, stream=True)
+    gzip_file_location = "{}.gz".format(DB_FILE_LOCATION)
+
+    with open(gzip_file_location,'wb') as f:
+        for chunk in req.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
+                f.flush()
+
+    app.logger.info("decompressing database file...")
+    with open(DB_FILE_LOCATION, 'wb') as f:
+        with gzip.open(gzip_file_location, 'rb') as g:
+            f.write(g.read())
+
+def get_db_reader():
+    reader = getattr(g, '_db_reader', None)
+    if reader is None:
+        app.logger.info("opening connection to database")
+        reader = geoip2.database.Reader(DB_FILE_LOCATION)
+    return reader
+
+@app.route('/geoip/')
+@app.route('/geoip/<ip_address>')
+def geoip(ip_address=None):
+    ip = ip_address if ip_address else request.remote_addr
+    try:
+        app.logger.info("looking up IP address: {}".format(ip))
+        geoip_reader = get_db_reader()
+        result = geoip_reader.country(ip)
+        response = {}
+        for key, value in JSON_MAPPING.items():
+            try:
+                response[key] = reduce(getattr, value.split('.'), result)
+            except AttributeError:
+                response[key] = ''
+        response['ip'] = ip
+        response['metro_code'] = METRO_CODE
+        response['code'] = CODE
+        app.logger.info("returning response: \n{}".format(json.dumps(response,indent=2)))
+        return jsonify(**response)
+    except geoip2.errors.AddressNotFoundError as e:
+        app.logger.warning("Unable find ip address: {}".format(e))
+        return jsonify({'error': {'message': e.message}})
+
+        
 """ Application """
-@app.route('/policy/v1/participant/location', method='GET')
+@app.route('/policy/v1/participant/location')
 def send_location_policy():
-    params = request.query.decode()
-    if "remote_address" in params:
+    # params = request.query.decode()
+    ip = request.args.get('remote_address', '')
+    app.logger.warning("Unable find ip address: {}".format(ip))
+    if ip:
         location_response = json_response
+        geoip_reader = get_db_reader()
+        result = geoip_reader.country(ip)
+        app.logger.warning("Result: {}".format(result))
         try:
-            continent_code = geoip_reader.country(params.remote_address).continent.code
+            continent_code = geoip_reader.country(ip).continent.code
             print("User connected from : "+continent_list[continent_code])
             if continent_code == "EU":
                 location_response["status"] = "success"
@@ -69,16 +128,18 @@ def send_location_policy():
             print("Dialer IP was not found")
             location_response["status"] = "not found"
         location_response["credit"] = "AWS regional Policy"
-        response.content_type = "application/json"
-        return json_dumps(location_response)
+        # response.content_type = "application/json"
+        # return json_dumps(location_response)
+        return jsonify(**location_response)
     else:
         return """KO"""
 
-run(app, host=config["server"]["bind_address"], port=config["server"]["bind_port"])
+if __name__ == '__main__':
+    args = parse_arguments()
+    setup_logging(args.verbose)
 
-""" Database disconnection """
-try:
-    geoip_reader.close()
-except NameError:
-    print("Connection to DB not found")
+    if args.fresh or args.download:
+        download_fresh_db()
 
+    if not args.download:
+        app.run(debug=args.debug)
