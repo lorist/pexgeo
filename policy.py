@@ -25,7 +25,7 @@ json_response = { "status": "default",
             "result": {},
             }
 
-appication = Flask(__name__)
+application = Flask(__name__)
 
 def setup_logging(loglevel):
     logformat = "%(asctime)s: %(message)s"
@@ -70,14 +70,26 @@ def get_db_reader():
 @application.route('/policy/v1/participant/location')
 def send_location_policy():
     ip = request.args.get('remote_address', '')
-    application.logger.info("Call from remote address: {}".format(ip))
+    prot = request.args.get('protocol', '')
+    direction = request.args.get('call_direction', '')
+    # Nominate US location for streaming:
+    if prot == 'rtmp' and direction == 'dial_out':
+        location_response = json_response
+        location_response["status"] = "success"
+        location_response["result"]["location"] = "AWS-US-East"
+        location_response["result"]["primary_overflow_location"] = "AWS-Ireland"
+        location_response["credit"] = "AWS regional Policy"
+        return jsonify(**location_response)
+
     if ip:
+        application.logger.warning("Matched address: {}".format(ip))
         location_response = json_response
         geoip_reader = get_db_reader()
         result = geoip_reader.country(ip)
-        application.logger.info("Call from: {}".format(result))
+        application.logger.warning("Result: {}".format(result))
         try:
             continent_code = geoip_reader.country(ip).continent.code
+            print("User connected from : "+continent_list[continent_code])
             if continent_code == "EU":
                 location_response["status"] = "success"
                 location_response["result"]["location"] = "AWS-Ireland"
@@ -100,7 +112,6 @@ def send_location_policy():
             print("Dialer IP was not found")
             location_response["status"] = "not found"
         location_response["credit"] = "AWS regional Policy"
-        application.logger.info("Nominating {} location".format(location_response))
         return jsonify(**location_response)
     else:
         return """KO"""
